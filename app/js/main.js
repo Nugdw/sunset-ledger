@@ -1,138 +1,138 @@
-// Sunset Ledger — boot and wiring.
-//
-// Loads the dataset, restores the hunter's progress, and keeps the five
-// views, the filter bar and the header progress in step. Rendering is
-// delegated to views.js; this file owns the state and the events.
+// main.js — boots Sunset Ledger: loads the data, reads the route from the hash, renders
+// the current view and the detail panel, and wires the toolbar (filters, spoiler shield,
+// export/import) and every card event. Routes look like #/tracker, #/roadmap,
+// #/missables, #/spoilers and #/guide, with an optional /<id> suffix that selects a
+// trophy, e.g. #/guide/39 opens the guide at Sneakthief.
 
-import { loadTrophies, tierCounts, TIER_LABELS } from './data.js';
-import { loadState, saveState, toggleEarned, reveal, revealAll, earnedCount } from './store.js';
-import { blankFilters, applyFilters, sortForTracker } from './filters.js';
-import { trackerView, roadmapView, missablesView, spoilersView, guideView } from './views.js';
+import { loadTrophies, countByTier, TROPHY_TOTAL } from './data.js';
+import { loadState, saveState, setEarned, earnedCount, exportProgress, importProgress } from './store.js';
+import { applyFilters } from './filters.js';
+import { renderTracker, renderRoadmap, renderMissables, renderSpoilers, renderGuide, renderDetail } from './views.js';
+
+const state = loadState();
+let trophies = [];
+let selectedId = -1;
 
 const viewEl = document.getElementById('view');
-const filterBar = document.getElementById('filter-bar');
+const detailEl = document.getElementById('detail');
 
-let trophies = [];
-let state = loadState();
-let filters = blankFilters();
-let currentView = 'tracker';
-let guideId = 1;
+function currentRoute() {
+  const parts = window.location.hash.replace(/^#\/?/, '').split('/');
+  const name = ['tracker', 'roadmap', 'missables', 'spoilers', 'guide'].includes(parts[0]) ? parts[0] : 'tracker';
+  const id = Number.parseInt(parts[1] ?? '', 10);
+  return { name, id: Number.isInteger(id) ? id : -1 };
+}
 
-function renderHeader() {
-  const total = trophies.length;
+function readFilters() {
+  return {
+    query: document.getElementById('filter-q').value.trim(),
+    kind: document.getElementById('filter-kind').value,
+    tier: document.getElementById('filter-tier').value,
+    hideEarned: document.getElementById('filter-unearned').checked,
+  };
+}
+
+function updateProgress() {
   const earned = earnedCount(state);
-  document.getElementById('progress-count').textContent = `${earned} / ${total}`;
-  document.getElementById('progress-pct').textContent = total ? `${Math.round((earned / total) * 100)}%` : '0%';
-  document.getElementById('progress-fill').style.width = total ? `${(earned / total) * 100}%` : '0%';
-  const counts = tierCounts(trophies);
-  document.getElementById('tier-counts').innerHTML = ['platinum', 'gold', 'silver', 'bronze']
-    .map((tier) => {
-      const got = trophies.filter((t) => t.tier === tier && state.earned[t.id]).length;
-      return `<span>${TIER_LABELS[tier]} ${got}/${counts[tier]}</span>`;
-    })
-    .join('');
-  document.getElementById('spoiler-toggle').checked = state.spoilers;
+  const pct = Math.round((earned / TROPHY_TOTAL) * 100);
+  document.getElementById('progress-count').textContent = `${earned} / ${TROPHY_TOTAL}`;
+  document.getElementById('progress-pct').textContent = `${pct}%`;
+  document.getElementById('progress-fill').style.width = `${pct}%`;
+  const tiers = countByTier(trophies.filter((t) => state.earned[t.id]));
+  document.getElementById('progress-note').textContent = earned === 0
+    ? 'No trophies checked off yet. Your ledger is saved in this browser.'
+    : `Earned so far — platinum ${tiers.platinum}, gold ${tiers.gold}, silver ${tiers.silver}, bronze ${tiers.bronze}.`;
 }
 
 function render() {
-  renderHeader();
-  filterBar.style.display = currentView === 'tracker' ? '' : 'none';
-  if (currentView === 'tracker') {
-    const visible = sortForTracker(applyFilters(trophies, filters, state, state.spoilers));
-    viewEl.innerHTML = trackerView(visible, state);
-  } else if (currentView === 'roadmap') {
-    viewEl.innerHTML = roadmapView(trophies, state);
-  } else if (currentView === 'missables') {
-    viewEl.innerHTML = missablesView(trophies, state);
-  } else if (currentView === 'spoilers') {
-    viewEl.innerHTML = spoilersView(trophies, state);
+  const route = currentRoute();
+  if (route.id > 0) selectedId = route.id;
+  for (const tab of document.querySelectorAll('[data-tab]')) {
+    tab.classList.toggle('active', tab.dataset.tab === route.name);
+  }
+  if (route.name === 'tracker') {
+    viewEl.innerHTML = renderTracker(applyFilters(trophies, readFilters(), state), state, selectedId);
+  } else if (route.name === 'roadmap') {
+    viewEl.innerHTML = renderRoadmap(trophies, state);
+  } else if (route.name === 'missables') {
+    viewEl.innerHTML = renderMissables(trophies, state, selectedId);
+  } else if (route.name === 'spoilers') {
+    viewEl.innerHTML = renderSpoilers(trophies, state);
   } else {
-    viewEl.innerHTML = guideView(trophies, state, guideId);
+    viewEl.innerHTML = renderGuide(trophies, state, selectedId);
   }
+  const selected = trophies.find((t) => t.id === selectedId) ?? null;
+  detailEl.innerHTML = renderDetail(selected, state);
+  updateProgress();
 }
 
-function setView(name) {
-  currentView = name;
-  document.querySelectorAll('.tab').forEach((tab) => {
-    tab.classList.toggle('is-active', tab.dataset.view === name);
-  });
-  render();
-}
-
-// Deep links: #view=roadmap (or tracker, missables, spoilers, guide) opens
-// that view directly, and #guide=<id> preselects a trophy in the Guide.
-// Tab switches keep the hash in step, so any view can be bookmarked.
-function applyHash() {
-  const params = new URLSearchParams(location.hash.replace(/^#/, ''));
-  const view = params.get('view');
-  if (view && ['tracker', 'roadmap', 'missables', 'spoilers', 'guide'].includes(view)) {
-    currentView = view;
-  }
-  const gid = Number(params.get('guide'));
-  if (Number.isInteger(gid) && gid >= 1 && gid <= 55) guideId = gid;
-}
-
-document.querySelectorAll('.tab').forEach((tab) => {
-  tab.addEventListener('click', () => setView(tab.dataset.view));
-});
-
-document.getElementById('spoiler-toggle').addEventListener('change', (event) => {
-  state.spoilers = event.target.checked;
-  saveState(state);
-  render();
-});
-
-document.getElementById('filter-query').addEventListener('input', (event) => {
-  filters.query = event.target.value;
-  render();
-});
-document.getElementById('filter-tier').addEventListener('change', (event) => {
-  filters.tier = event.target.value;
-  render();
-});
-document.getElementById('filter-remaining').addEventListener('change', (event) => {
-  filters.remainingOnly = event.target.checked;
-  render();
-});
-document.getElementById('filter-missable').addEventListener('change', (event) => {
-  filters.missableOnly = event.target.checked;
-  render();
-});
-
-viewEl.addEventListener('click', (event) => {
-  const button = event.target.closest('[data-action]');
-  if (!button) return;
-  const id = Number(button.dataset.id);
-  if (button.dataset.action === 'guide' || button.dataset.action === 'pick') {
-    guideId = id;
-    setView('guide');
-  } else if (button.dataset.action === 'reveal') {
-    reveal(state, id);
+function onViewClick(event) {
+  const reveal = event.target.closest('[data-reveal]');
+  if (reveal) {
+    state.revealed[Number(reveal.dataset.reveal)] = true;
+    saveState(state);
     render();
-  } else if (button.dataset.action === 'reveal-all') {
-    revealAll(state, trophies);
-    render();
-  }
-});
-
-viewEl.addEventListener('change', (event) => {
-  const box = event.target.closest('[data-action="earn"]');
-  if (!box) return;
-  toggleEarned(state, Number(box.dataset.id));
-  render();
-});
-
-loadTrophies().then((loaded) => {
-  if (!loaded) {
-    viewEl.innerHTML = `
-      <div class="error-box">
-        <p>The ledger could not load its trophy list (<code>data/trophies.json</code>).</p>
-        <p>Serve the app over HTTP — for example <code>python3 -m http.server 8080 --directory app</code> —
-        instead of opening the page as a <code>file://</code> URL, and reload.</p>
-      </div>`;
     return;
   }
-  trophies = loaded;
-  applyHash();
-  setView(currentView);
-});
+  const card = event.target.closest('[data-select]');
+  if (card && !event.target.matches('input[type="checkbox"]')) {
+    selectedId = Number(card.dataset.select);
+    render();
+  }
+}
+
+function onEarnChange(event) {
+  if (event.target.id === 'guide-picker') {
+    selectedId = Number(event.target.value);
+    render();
+    return;
+  }
+  const box = event.target.closest('[data-earn]');
+  if (!box) return;
+  setEarned(state, Number(box.dataset.earn), box.checked);
+  render();
+}
+
+function wireToolbar() {
+  for (const id of ['filter-q', 'filter-kind', 'filter-tier', 'filter-unearned']) {
+    document.getElementById(id).addEventListener('input', render);
+    document.getElementById(id).addEventListener('change', render);
+  }
+  const shield = document.getElementById('opt-spoilers');
+  shield.checked = state.spoilerShield;
+  shield.addEventListener('change', () => {
+    state.spoilerShield = shield.checked;
+    saveState(state);
+    render();
+  });
+  document.getElementById('btn-export').addEventListener('click', () => exportProgress(state));
+  const fileInput = document.getElementById('file-import');
+  document.getElementById('btn-import').addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', async () => {
+    if (!fileInput.files[0]) return;
+    try {
+      state.earned = await importProgress(fileInput.files[0]);
+      saveState(state);
+      render();
+    } catch {
+      window.alert('That file could not be imported as Sunset Ledger progress.');
+    }
+  });
+}
+
+async function boot() {
+  try {
+    trophies = await loadTrophies();
+  } catch {
+    viewEl.innerHTML = '<h2>The ledger could not load</h2><p>data/trophies.json did not answer — serve the app folder over HTTP (fetch of a local file is blocked in some browsers) and reload.</p>';
+    return;
+  }
+  wireToolbar();
+  viewEl.addEventListener('click', onViewClick);
+  viewEl.addEventListener('change', onEarnChange);
+  detailEl.addEventListener('change', onEarnChange);
+  window.addEventListener('hashchange', render);
+  render();
+}
+
+boot();

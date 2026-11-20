@@ -1,80 +1,71 @@
-[![make.fun bounty](https://make.fun/badge/gta6-trophy-guide-01.svg)](https://make.fun/bounty/gta6-trophy-guide-01)
-[![Sunset Ledger — rank](https://make.fun/badge/gta6-trophy-guide-01/Nugdw/sunset-ledger/rank.svg)](https://make.fun/bounty/gta6-trophy-guide-01)
-[![Sunset Ledger — reward](https://make.fun/badge/gta6-trophy-guide-01/Nugdw/sunset-ledger/reward.svg)](https://make.fun/bounty/gta6-trophy-guide-01)
+[![Sunset Ledger on make.fun](https://make.fun/badge/gta6-trophy-guide-01.svg)](https://make.fun/bounty/gta6-trophy-guide-01)
+[![Sunset Ledger rank](https://make.fun/badge/gta6-trophy-guide-01/Nugdw/sunset-ledger/rank.svg)](https://make.fun/bounty/gta6-trophy-guide-01)
+[![Sunset Ledger reward](https://make.fun/badge/gta6-trophy-guide-01/Nugdw/sunset-ledger/reward.svg)](https://make.fun/bounty/gta6-trophy-guide-01)
 
 # Sunset Ledger — GTA VI Trophy Guide & Tracker
 
-Sunset Ledger is a complete, offline trophy guide for Grand Theft Auto VI on
-PlayStation 5: all 55 trophies from the official list — 1 platinum, 2 gold,
-6 silver and 46 bronze, 28 of them hidden — each with a written guide,
-practical steps, and a source note. It is built for the road to the platinum:
-play the story, work the character strands, sweep the collectibles, then grind
-out the big counters, with the one missable trophy flagged long before you can
-walk past it.
+An offline guide and tracker for the 55 PlayStation 5 trophies of Grand Theft Auto VI,
+built for the [make.fun gta6-trophy-guide-01 bounty](https://make.fun/bounty/gta6-trophy-guide-01).
 
-This repository is an entry to the make.fun bounty
-[gta6-trophy-guide-01](https://make.fun/bounty/gta6-trophy-guide-01).
+Sunset Ledger covers the whole official list — 1 platinum, 2 gold, 6 silver and 46 bronze,
+28 of them hidden — with a guide for every trophy written for this entry, each one naming
+the sources it rests on. It is a tracker too: tick trophies off as you earn them and the
+ledger remembers.
 
-## The app
+## What it does
 
-The guide is a plain static web app in `app/` — no build step, no network
-calls, everything it shows comes from its own files.
+- **Tracker** — the full list of 55 with official names, descriptions and grades; a checkbox
+  per trophy, progress saved in the browser (localStorage), and a live completion percentage.
+- **Roadmap** — a five-stage route to the platinum built from the official descriptions:
+  story first, collectible sweeps, the activity grind, online, then 100% and the platinum.
+- **Missables** — the game's one missable trophy, flagged with what to do before its point
+  of no return. Everything else can be earned after the story.
+- **Spoilers** — story trophies stay behind a spoiler shield (names and descriptions hidden)
+  until earned or deliberately revealed; a dedicated tab lists all 28 hidden trophies.
+- **Guide** — every trophy's guide on one page: what to do, the steps, and its sources.
+- **Filters** — text search plus kind filters (story, missable, collectibles, activities,
+  online) and grade filters, and a hide-earned switch.
+- **Export / import** — progress downloads as a JSON file and imports back on any browser.
 
-- **Tracker** — every trophy as a card with a checkbox; progress is kept in
-  your browser's localStorage, and the header shows your completion
-  percentage and per-tier counts.
-- **Roadmap** — the 55 trophies arranged into five stages, from the opening
-  mission to the platinum pop, so you always know what to chase next.
-- **Missables** — the trophies that can be lost on a playthrough (there is
-  exactly one true missable, *Actions Speak Louder*), with the point of no
-  return spelled out and the save to keep.
-- **Spoilers** — hidden trophies stay blurred until you reveal them, one at a
-  time or all at once; a master spoiler switch covers the whole app.
-- **Guide** — pick any trophy and read its full walkthrough: what the game
-  asks for, the fastest route through it, and where the information came from.
+The app makes no network requests at run time beyond fetching its own data file from the
+same origin, so it works fully offline once served.
 
-Filters on the Tracker narrow the list by tier, by name or description text,
-and to trophies that are still unearned or missable.
+## Run it
 
-## Running it
-
-Serve the app folder with any static file server, for example:
+Serve the app folder with any static file server and open it in a browser:
 
 ```sh
-python3 -m http.server 8080 --directory app
+cd app && python3 -m http.server 8080
+# then open http://localhost:8080
 ```
 
-then open <http://localhost:8080>. The app fetches `app/data/trophies.json`,
-so it needs to be served over HTTP rather than opened as a `file://` page.
+## Hand it in
 
-## Handing it in
-
-`main.ts` (Node 22+, standard library only) reads the trophy dataset and
-every file of the app, and writes `dossier.json`: the guide's summary —
-trophy counts per tier, total guide steps, hidden and missable counts — plus
-the SHA-256 and size of every app file, so what was handed in can be
-verified exactly.
+`main.ts` (Node 22, standard library only) copies `app/` and `screenshots/` to the output
+directory and writes `dossier.json` there using `buildDossier` from
+`vendor/makefun-frontend.ts`, byte for byte as the scorer's copy of the library writes it:
 
 ```sh
-node main.ts
+mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
 ```
 
-The dossier lands in `out/` (`MAKEFUN_OUTPUT_DIR` names a different output
-directory when set). The run is deterministic: the same repository produces
-the same `dossier.json` bytes every time. The vendored library in
-`vendor/makefun-frontend.ts` is the kit's copy, kept byte-identical and
-untouched, as the kit requires of it.
+Outside the grader, `MAKEFUN_OUTPUT_DIR` stands in for `/output`.
 
-## The data
+## Layout
 
-`app/data/trophies.json` holds the 55 official trophies. Each entry carries
-its PlayStation name, grade, description, hidden and missable flags, a guide
-written for this entry, the steps that earn it, and a source string naming
-where the trophy's facts were cross-checked (the official PlayStation list as
-mirrored by PSNProfiles and Exophase). Grand Theft Auto VI trophy hunting is
-a fast-moving target: if Rockstar patches a requirement, the guide text for
-that trophy is the place to look first.
+- `app/index.html` — the single page: masthead, tabs, filter toolbar, views, detail panel.
+- `app/css/main.css` — the Sunset Ledger theme, drawn in plain CSS.
+- `app/js/data.js` — loads and normalises `app/data/trophies.json`.
+- `app/js/store.js` — localStorage progress, export and import.
+- `app/js/filters.js` — search, kind and grade filtering, spoiler-shield logic.
+- `app/js/views.js` — the five views and the detail panel.
+- `app/js/main.js` — routing, rendering and event wiring.
+- `app/data/trophies.json` — the 55 trophies: official names, descriptions and grades,
+  plus kind, hidden and missable flags, and a cited guide for each.
+- `screenshots/` — renders of the app itself: tracker, roadmap, missables, guide.
+- `vendor/makefun-frontend.ts` — the kit's dossier library, unchanged.
 
 ## License
 
-MIT — see `LICENSE`.
+MIT — see `LICENSE`. Trophy names and descriptions are as PlayStation publishes them;
+Sunset Ledger is an unofficial fan work and uses no Rockstar artwork or logos.
