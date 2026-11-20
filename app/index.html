@@ -1,120 +1,55 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sunset Ledger — GTA VI Trophy Guide &amp; Tracker</title>
-<meta name="description" content="An offline guide and tracker for all 55 PlayStation 5 trophies of Grand Theft Auto VI: cited steps for every trophy, a roadmap to the platinum, missable warnings, saved progress with export and import.">
 <link rel="stylesheet" href="css/main.css">
 </head>
 <body>
-<header id="site-header">
-  <div class="brand">
-    <div class="brand-mark" aria-hidden="true">SL</div>
-    <div class="brand-text">
+<header class="site-header">
+  <div class="header-inner">
+    <div class="brand">
       <h1>Sunset Ledger</h1>
-      <p class="brand-sub">GTA VI Trophy Guide &amp; Tracker — every one of the 55 PlayStation 5 trophies, with cited steps</p>
+      <p class="tagline">The Grand Theft Auto VI trophy guide &amp; tracker — every one of the 55, accounted for.</p>
+    </div>
+    <div class="progress-box" aria-live="polite">
+      <div class="progress-numbers"><span id="progress-count">0 / 55</span> trophies · <span id="progress-pct">0%</span></div>
+      <div class="progress-bar"><div id="progress-fill"></div></div>
+      <div class="tier-counts" id="tier-counts"></div>
     </div>
   </div>
-  <div class="progress-card" id="progress-card">
-    <div class="progress-big"><span id="earned-count">0</span><span class="progress-of">/ 55 earned</span></div>
-    <div class="progress-bar" role="progressbar" aria-label="Trophies earned" aria-valuemin="0" aria-valuemax="55" aria-valuenow="0" id="progress-bar"><span id="progress-fill"></span></div>
-    <p class="progress-grades" id="progress-grades"></p>
-    <p class="progress-makeup">The official list: 1 platinum · 2 gold · 6 silver · 46 bronze · 28 hidden until earned · 0 online</p>
+  <nav class="tabs" role="tablist" aria-label="Guide views">
+    <button class="tab is-active" data-view="tracker" role="tab">Tracker</button>
+    <button class="tab" data-view="roadmap" role="tab">Roadmap</button>
+    <button class="tab" data-view="missables" role="tab">Missables</button>
+    <button class="tab" data-view="spoilers" role="tab">Spoilers</button>
+    <button class="tab" data-view="guide" role="tab">Guide</button>
+    <label class="spoiler-switch">
+      <input type="checkbox" id="spoiler-toggle">
+      <span>Reveal spoilers</span>
+    </label>
+  </nav>
+  <div class="filter-bar" id="filter-bar">
+    <input type="search" id="filter-query" placeholder="Search trophies…" aria-label="Search trophies">
+    <select id="filter-tier" aria-label="Filter by tier">
+      <option value="all">All tiers</option>
+      <option value="platinum">Platinum</option>
+      <option value="gold">Gold</option>
+      <option value="silver">Silver</option>
+      <option value="bronze">Bronze</option>
+    </select>
+    <label class="filter-check"><input type="checkbox" id="filter-remaining"> Still to earn</label>
+    <label class="filter-check"><input type="checkbox" id="filter-missable"> Missable only</label>
   </div>
 </header>
 
-<nav id="view-tabs" aria-label="Guide sections">
-  <button type="button" data-view="tracker" class="tab is-active">Tracker</button>
-  <button type="button" data-view="roadmap" class="tab">Roadmap to Platinum</button>
-  <button type="button" data-view="missables" class="tab">Missables <span class="tab-badge" id="missable-badge">1</span></button>
-  <button type="button" data-view="next" class="tab">Next Up</button>
-  <button type="button" data-view="settings" class="tab">Settings &amp; Data</button>
-</nav>
+<main id="view" class="view"></main>
 
-<main>
-  <section id="view-tracker" class="view">
-    <div class="filter-bar" id="filter-bar">
-      <label class="search-box">Search <input type="search" id="filter-search" placeholder="Trophy, mission, activity…" autocomplete="off"></label>
-      <div class="chip-row" id="kind-chips" role="group" aria-label="Filter by kind">
-        <button type="button" data-kind="all" class="chip is-active">All 55</button>
-        <button type="button" data-kind="story" class="chip">Story</button>
-        <button type="button" data-kind="missable" class="chip">Missable</button>
-        <button type="button" data-kind="collectibles" class="chip">Collectibles</button>
-        <button type="button" data-kind="activities" class="chip">Activities</button>
-        <button type="button" data-kind="online" class="chip">Online</button>
-      </div>
-      <label class="grade-box">Grade
-        <select id="filter-grade">
-          <option value="all">All grades</option>
-          <option value="platinum">Platinum</option>
-          <option value="gold">Gold</option>
-          <option value="silver">Silver</option>
-          <option value="bronze">Bronze</option>
-        </select>
-      </label>
-      <label class="toggle"><input type="checkbox" id="filter-hide-earned"> Hide earned</label>
-      <label class="toggle"><input type="checkbox" id="filter-spoilers"> Spoiler shield</label>
-    </div>
-    <p class="result-line" id="result-line"></p>
-    <div class="tracker-layout">
-      <ol class="trophy-list" id="trophy-list"></ol>
-      <aside class="detail-pane" id="detail-pane" aria-live="polite"></aside>
-    </div>
-  </section>
-
-  <section id="view-roadmap" class="view" hidden>
-    <div class="prose" id="roadmap-intro"></div>
-    <div id="roadmap-stages"></div>
-  </section>
-
-  <section id="view-missables" class="view" hidden>
-    <div class="prose" id="missables-intro"></div>
-    <div id="missables-list"></div>
-  </section>
-
-  <section id="view-next" class="view" hidden>
-    <div class="prose">
-      <h2>Next up</h2>
-      <p>The planner orders what is left: the one trophy that can be missed comes first, then the earliest roadmap stage, then the trophies closest to done. Mark one earned and the list re-plans itself.</p>
-    </div>
-    <ol class="next-list" id="next-list"></ol>
-  </section>
-
-  <section id="view-settings" class="view" hidden>
-    <div class="prose">
-      <h2>Settings &amp; data</h2>
-      <p>Progress is saved in this browser (localStorage) as you tick trophies off — nothing leaves the device and the guide works with the network off. Export keeps a copy you can move to another browser; import reads it back.</p>
-    </div>
-    <div class="settings-grid">
-      <div class="setting-card">
-        <h3>Spoiler shield</h3>
-        <p>Hides the names and descriptions of the story trophies until you earn them, so the checklist cannot spoil the plot. Hidden trophies are marked as hidden on PlayStation itself.</p>
-        <label class="toggle"><input type="checkbox" id="setting-spoilers"> Spoiler shield on</label>
-      </div>
-      <div class="setting-card">
-        <h3>Export progress</h3>
-        <p>Downloads a small JSON file with your earned trophies, counters and settings.</p>
-        <button type="button" id="export-button">Export progress</button>
-      </div>
-      <div class="setting-card">
-        <h3>Import progress</h3>
-        <p>Reads an exported Sunset Ledger file and replaces the progress saved here.</p>
-        <label class="import-label">Choose file <input type="file" id="import-file" accept="application/json,.json"></label>
-        <p class="import-note" id="import-note"></p>
-      </div>
-      <div class="setting-card">
-        <h3>Start over</h3>
-        <p>Clears every tick, counter and setting saved in this browser.</p>
-        <button type="button" id="reset-button">Reset all progress</button>
-      </div>
-    </div>
-    <div class="prose" id="sources-register"></div>
-  </section>
-</main>
-
-<footer id="site-footer">
-  <p>Sunset Ledger is a fan-made guide in its own words and its own look. Trophy names and descriptions are shown as PlayStation publishes them; every guide cites its sources beside it. No Rockstar Games logo or artwork is used. Built for make.fun's GTA 6 trophy guide bounty; free and open source under the MIT license.</p>
+<footer class="site-footer">
+  <p>Sunset Ledger tracks the official PlayStation 5 list for Grand Theft Auto VI:
+  55 trophies — 1 platinum, 2 gold, 6 silver, 46 bronze — 28 hidden, 1 missable.
+  Progress never leaves your browser; it is stored in localStorage on this device.</p>
 </footer>
 
 <script type="module" src="js/main.js"></script>

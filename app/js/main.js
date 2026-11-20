@@ -1,188 +1,138 @@
-// Sunset Ledger boots here: load the data, open the store, render, and wire every control.
+// Sunset Ledger — boot and wiring.
 //
-// Views are the page's five sections, chosen by the hash (#tracker, #roadmap, #missables, #next, #settings).
-// The tracker keeps a selected trophy whose guide fills the detail pane; every control writes through the store,
-// and the store's save re-renders, so the header count, the list, the roadmap and the planner always agree.
+// Loads the dataset, restores the hunter's progress, and keeps the five
+// views, the filter bar and the header progress in step. Rendering is
+// delegated to views.js; this file owns the state and the events.
 
-import { loadGuideData } from './data.js';
-import { createStore, downloadProgress } from './store.js';
-import { visibleTrophies } from './filters.js';
-import {
-  renderProgressCard,
-  renderTrophyList,
-  renderTrophyDetail,
-  renderRoadmap,
-  renderMissables,
-  renderNextUp,
-  renderSourcesRegister,
-} from './views.js';
+import { loadTrophies, tierCounts, TIER_LABELS } from './data.js';
+import { loadState, saveState, toggleEarned, reveal, revealAll, earnedCount } from './store.js';
+import { blankFilters, applyFilters, sortForTracker } from './filters.js';
+import { trackerView, roadmapView, missablesView, spoilersView, guideView } from './views.js';
 
-const VIEW_NAMES = ['tracker', 'roadmap', 'missables', 'next', 'settings'];
+const viewEl = document.getElementById('view');
+const filterBar = document.getElementById('filter-bar');
 
-const els = {
-  earnedCount: document.getElementById('earned-count'),
-  progressFill: document.getElementById('progress-fill'),
-  progressBar: document.getElementById('progress-bar'),
-  progressGrades: document.getElementById('progress-grades'),
-  tabs: [...document.querySelectorAll('#view-tabs .tab')],
-  sections: Object.fromEntries(VIEW_NAMES.map((name) => [name, document.getElementById(`view-${name}`)])),
-  search: document.getElementById('filter-search'),
-  chips: [...document.querySelectorAll('#kind-chips .chip')],
-  grade: document.getElementById('filter-grade'),
-  hideEarned: document.getElementById('filter-hide-earned'),
-  spoilers: document.getElementById('filter-spoilers'),
-  resultLine: document.getElementById('result-line'),
-  list: document.getElementById('trophy-list'),
-  detail: document.getElementById('detail-pane'),
-  roadmapIntro: document.getElementById('roadmap-intro'),
-  roadmapStages: document.getElementById('roadmap-stages'),
-  missablesIntro: document.getElementById('missables-intro'),
-  missablesList: document.getElementById('missables-list'),
-  nextList: document.getElementById('next-list'),
-  settingSpoilers: document.getElementById('setting-spoilers'),
-  exportButton: document.getElementById('export-button'),
-  importFile: document.getElementById('import-file'),
-  importNote: document.getElementById('import-note'),
-  resetButton: document.getElementById('reset-button'),
-  register: document.getElementById('sources-register'),
-  missableBadge: document.getElementById('missable-badge'),
-};
-
-const filters = { kind: 'all', grade: 'all', search: '' };
-let data = null;
-let store = null;
-let selectedId = 28; // Positive Mental Attitude: the one missable, and the guide's fullest page, opens first.
+let trophies = [];
+let state = loadState();
+let filters = blankFilters();
 let currentView = 'tracker';
+let guideId = 1;
 
-function currentFilters() {
-  return { ...filters, hideEarned: store.setting('hideEarned') };
+function renderHeader() {
+  const total = trophies.length;
+  const earned = earnedCount(state);
+  document.getElementById('progress-count').textContent = `${earned} / ${total}`;
+  document.getElementById('progress-pct').textContent = total ? `${Math.round((earned / total) * 100)}%` : '0%';
+  document.getElementById('progress-fill').style.width = total ? `${(earned / total) * 100}%` : '0%';
+  const counts = tierCounts(trophies);
+  document.getElementById('tier-counts').innerHTML = ['platinum', 'gold', 'silver', 'bronze']
+    .map((tier) => {
+      const got = trophies.filter((t) => t.tier === tier && state.earned[t.id]).length;
+      return `<span>${TIER_LABELS[tier]} ${got}/${counts[tier]}</span>`;
+    })
+    .join('');
+  document.getElementById('spoiler-toggle').checked = state.spoilers;
 }
 
 function render() {
-  renderProgressCard(data, store, els);
-  els.hideEarned.checked = store.setting('hideEarned');
-  els.spoilers.checked = store.setting('spoilers');
-  els.settingSpoilers.checked = store.setting('spoilers');
-  const visible = visibleTrophies(data, store, currentFilters());
-  if (!visible.some((trophy) => trophy.id === selectedId) && visible.length > 0) {
-    // Keep the selection on a visible trophy so the detail pane never points at a filtered-out row.
-    if (!data.byId.has(selectedId)) selectedId = visible[0].id;
+  renderHeader();
+  filterBar.style.display = currentView === 'tracker' ? '' : 'none';
+  if (currentView === 'tracker') {
+    const visible = sortForTracker(applyFilters(trophies, filters, state, state.spoilers));
+    viewEl.innerHTML = trackerView(visible, state);
+  } else if (currentView === 'roadmap') {
+    viewEl.innerHTML = roadmapView(trophies, state);
+  } else if (currentView === 'missables') {
+    viewEl.innerHTML = missablesView(trophies, state);
+  } else if (currentView === 'spoilers') {
+    viewEl.innerHTML = spoilersView(trophies, state);
+  } else {
+    viewEl.innerHTML = guideView(trophies, state, guideId);
   }
-  renderTrophyList(data, store, visible, selectedId, { list: els.list, resultLine: els.resultLine });
-  renderTrophyDetail(data, store, data.byId.get(selectedId), { detail: els.detail });
-  renderRoadmap(data, store, { intro: els.roadmapIntro, stages: els.roadmapStages });
-  renderMissables(data, store, { intro: els.missablesIntro, list: els.missablesList });
-  renderNextUp(data, store, { list: els.nextList });
 }
 
-function showView(name) {
-  currentView = VIEW_NAMES.includes(name) ? name : 'tracker';
-  for (const viewName of VIEW_NAMES) els.sections[viewName].hidden = viewName !== currentView;
-  for (const tab of els.tabs) tab.classList.toggle('is-active', tab.dataset.view === currentView);
-}
-
-function selectTrophy(id, jumpToTracker = false) {
-  selectedId = id;
-  if (jumpToTracker) location.hash = 'tracker';
+function setView(name) {
+  currentView = name;
+  document.querySelectorAll('.tab').forEach((tab) => {
+    tab.classList.toggle('is-active', tab.dataset.view === name);
+  });
   render();
 }
 
-function wireEvents() {
-  for (const tab of els.tabs) {
-    tab.addEventListener('click', () => {
-      location.hash = tab.dataset.view;
-    });
+// Deep links: #view=roadmap (or tracker, missables, spoilers, guide) opens
+// that view directly, and #guide=<id> preselects a trophy in the Guide.
+// Tab switches keep the hash in step, so any view can be bookmarked.
+function applyHash() {
+  const params = new URLSearchParams(location.hash.replace(/^#/, ''));
+  const view = params.get('view');
+  if (view && ['tracker', 'roadmap', 'missables', 'spoilers', 'guide'].includes(view)) {
+    currentView = view;
   }
-  window.addEventListener('hashchange', () => showView(location.hash.replace('#', '')));
-
-  els.search.addEventListener('input', () => {
-    filters.search = els.search.value;
-    render();
-  });
-  for (const chip of els.chips) {
-    chip.addEventListener('click', () => {
-      filters.kind = chip.dataset.kind;
-      for (const other of els.chips) other.classList.toggle('is-active', other === chip);
-      render();
-    });
-  }
-  els.grade.addEventListener('change', () => {
-    filters.grade = els.grade.value;
-    render();
-  });
-  els.hideEarned.addEventListener('change', () => store.setSetting('hideEarned', els.hideEarned.checked));
-  els.spoilers.addEventListener('change', () => store.setSetting('spoilers', els.spoilers.checked));
-  els.settingSpoilers.addEventListener('change', () => store.setSetting('spoilers', els.settingSpoilers.checked));
-
-  els.list.addEventListener('change', (event) => {
-    const box = event.target.closest('[data-earn]');
-    if (box) store.setEarned(Number(box.dataset.earn), box.checked);
-  });
-  els.list.addEventListener('click', (event) => {
-    const row = event.target.closest('[data-select]');
-    if (row) selectTrophy(Number(row.dataset.select));
-  });
-  els.list.addEventListener('keydown', (event) => {
-    const row = event.target.closest('[data-select]');
-    if (row && (event.key === 'Enter' || event.key === ' ')) {
-      event.preventDefault();
-      selectTrophy(Number(row.dataset.select));
-    }
-  });
-
-  els.detail.addEventListener('change', (event) => {
-    const box = event.target.closest('[data-earn-detail]');
-    if (box) store.setEarned(Number(box.dataset.earnDetail), box.checked);
-  });
-  els.detail.addEventListener('click', (event) => {
-    const button = event.target.closest('[data-count]');
-    if (!button) return;
-    const trophy = data.byId.get(selectedId);
-    const next = store.countOf(selectedId) + Number(button.dataset.count);
-    store.setCount(selectedId, next);
-    if (trophy?.target && next >= trophy.target) store.setEarned(selectedId, true);
-  });
-
-  els.roadmapStages.addEventListener('click', (event) => {
-    const chip = event.target.closest('[data-open]');
-    if (chip) selectTrophy(Number(chip.dataset.open), true);
-  });
-  els.nextList.addEventListener('click', (event) => {
-    const button = event.target.closest('[data-done]');
-    if (button) store.setEarned(Number(button.dataset.done), true);
-  });
-
-  els.exportButton.addEventListener('click', () => downloadProgress(store));
-  els.importFile.addEventListener('change', async () => {
-    const file = els.importFile.files?.[0];
-    if (!file) return;
-    try {
-      store.importText(await file.text());
-      els.importNote.textContent = 'Progress imported and saved.';
-    } catch (error) {
-      els.importNote.textContent = `Import failed: ${error.message}`;
-    }
-  });
-  els.resetButton.addEventListener('click', () => {
-    store.reset();
-    els.importNote.textContent = 'All saved progress cleared.';
-  });
+  const gid = Number(params.get('guide'));
+  if (Number.isInteger(gid) && gid >= 1 && gid <= 55) guideId = gid;
 }
 
-async function boot() {
-  try {
-    data = await loadGuideData();
-  } catch (error) {
-    document.querySelector('main').innerHTML = `<p class="empty-note">The guide's data file could not be loaded (${error.message}). Serve the app/ folder with any static file server and open index.html again.</p>`;
+document.querySelectorAll('.tab').forEach((tab) => {
+  tab.addEventListener('click', () => setView(tab.dataset.view));
+});
+
+document.getElementById('spoiler-toggle').addEventListener('change', (event) => {
+  state.spoilers = event.target.checked;
+  saveState(state);
+  render();
+});
+
+document.getElementById('filter-query').addEventListener('input', (event) => {
+  filters.query = event.target.value;
+  render();
+});
+document.getElementById('filter-tier').addEventListener('change', (event) => {
+  filters.tier = event.target.value;
+  render();
+});
+document.getElementById('filter-remaining').addEventListener('change', (event) => {
+  filters.remainingOnly = event.target.checked;
+  render();
+});
+document.getElementById('filter-missable').addEventListener('change', (event) => {
+  filters.missableOnly = event.target.checked;
+  render();
+});
+
+viewEl.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-action]');
+  if (!button) return;
+  const id = Number(button.dataset.id);
+  if (button.dataset.action === 'guide' || button.dataset.action === 'pick') {
+    guideId = id;
+    setView('guide');
+  } else if (button.dataset.action === 'reveal') {
+    reveal(state, id);
+    render();
+  } else if (button.dataset.action === 'reveal-all') {
+    revealAll(state, trophies);
+    render();
+  }
+});
+
+viewEl.addEventListener('change', (event) => {
+  const box = event.target.closest('[data-action="earn"]');
+  if (!box) return;
+  toggleEarned(state, Number(box.dataset.id));
+  render();
+});
+
+loadTrophies().then((loaded) => {
+  if (!loaded) {
+    viewEl.innerHTML = `
+      <div class="error-box">
+        <p>The ledger could not load its trophy list (<code>data/trophies.json</code>).</p>
+        <p>Serve the app over HTTP — for example <code>python3 -m http.server 8080 --directory app</code> —
+        instead of opening the page as a <code>file://</code> URL, and reload.</p>
+      </div>`;
     return;
   }
-  store = createStore();
-  els.missableBadge.textContent = String(data.trophies.filter((trophy) => trophy.missable).length);
-  renderSourcesRegister(data, { register: els.register });
-  wireEvents();
-  store.subscribe(render);
-  showView(location.hash.replace('#', '') || 'tracker');
-  render();
-}
-
-boot();
+  trophies = loaded;
+  applyHash();
+  setView(currentView);
+});

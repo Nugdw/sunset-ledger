@@ -1,45 +1,42 @@
-// Loads the guide's one data file, app/data/trophies.json, and indexes it for the views.
+// Sunset Ledger — dataset access.
 //
-// The file holds the official list (each trophy's name, description and grade as PlayStation publishes them),
-// this guide's own words for every trophy (guide, numbered steps, tips, rarity, missable flag, roadmap stage),
-// the roadmap's stages, the missables watch list, and the register of sources every step cites. It is fetched
-// from the app's own server, like every file this app loads; the app fetches nothing from anywhere else.
+// The trophy list lives in app/data/trophies.json, next to this app, and is
+// fetched relative to the page so the app works from any static host. The
+// fetch is the one and only load: if it fails (for example the page was
+// opened as a file:// URL, where fetch of a sibling file is blocked), the
+// caller gets null and shows the serve-it-over-HTTP notice instead of a
+// silently empty guide.
 
-export async function loadGuideData() {
-  const response = await fetch('data/trophies.json');
-  if (!response.ok) throw new Error(`data/trophies.json answered ${response.status}`);
-  const data = await response.json();
-  const trophies = Array.isArray(data) ? data : data.trophies;
-  const byId = new Map(trophies.map((trophy) => [trophy.id, trophy]));
-  const sources = new Map((data.sources ?? []).map((source) => [source.key, source]));
-  return {
-    game: data.game ?? 'Grand Theft Auto VI',
-    platform: data.platform ?? 'PlayStation 5',
-    trophies,
-    byId,
-    sources,
-    roadmap: data.roadmap ?? [],
-    watchlist: data.watchlist ?? [],
-    facts: data.facts ?? [],
-  };
+export const TIERS = ['platinum', 'gold', 'silver', 'bronze'];
+
+export const TIER_LABELS = {
+  platinum: 'Platinum',
+  gold: 'Gold',
+  silver: 'Silver',
+  bronze: 'Bronze',
+};
+
+export async function loadTrophies() {
+  try {
+    const response = await fetch('data/trophies.json');
+    if (!response.ok) return null;
+    const parsed = await response.json();
+    const list = Array.isArray(parsed) ? parsed : parsed.trophies;
+    if (!Array.isArray(list) || list.length === 0) return null;
+    return list.slice().sort((a, b) => a.id - b.id);
+  } catch {
+    return null;
+  }
 }
 
-/** The source register entry a citation key names, or a plain label when the key is unknown. */
-export function sourceOf(data, key) {
-  return data.sources.get(key) ?? { key, name: key, url: '', detail: '', accessed: '' };
+export function tierCounts(trophies) {
+  const counts = { platinum: 0, gold: 0, silver: 0, bronze: 0, total: trophies.length };
+  for (const trophy of trophies) {
+    if (Object.hasOwn(counts, trophy.tier)) counts[trophy.tier] += 1;
+  }
+  return counts;
 }
 
-/** A trophy's sources as register entries, in the order its entry lists them. */
-export function sourcesOf(data, trophy) {
-  return (trophy.sources ?? []).map((key) => sourceOf(data, key));
-}
-
-/** The trophies of one roadmap stage, in list order. */
-export function trophiesOfStage(data, stage) {
-  return data.trophies.filter((trophy) => trophy.stage === stage);
-}
-
-/** How many of a list of trophies the store marks earned. */
-export function earnedAmong(store, trophies) {
-  return trophies.filter((trophy) => store.isEarned(trophy.id)).length;
+export function totalSteps(trophies) {
+  return trophies.reduce((sum, trophy) => sum + (Array.isArray(trophy.steps) ? trophy.steps.length : 0), 0);
 }
